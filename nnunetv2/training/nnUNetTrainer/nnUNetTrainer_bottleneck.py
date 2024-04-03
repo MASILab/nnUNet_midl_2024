@@ -5,7 +5,7 @@ import numpy as np
 from nnunetv2.utilities.get_network_from_plans import get_network_from_plans
 import copy
 import pdb
-from torchviz import make_dot
+#from torchviz import make_dot
 
 class Fuse_Bottleneck(nn.Module):
 
