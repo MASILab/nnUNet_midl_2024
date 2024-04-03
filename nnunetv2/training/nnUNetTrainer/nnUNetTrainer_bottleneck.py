@@ -67,8 +67,9 @@ class Fuse_Bottleneck(nn.Module):
 
                 output = ret if self.t2_model.encoder.return_skips else ret[-1]
         except:
-            pdb.set_trace()
-            
+            # pdb.set_trace()
+            print()            
+
         return output
 
 
@@ -99,7 +100,7 @@ class nnUNetTrainer_Bottleneck(nnUNetTrainer):
 
     
 
-        pdb.set_trace()
+        # pdb.set_trace()
         # pdb.set_trace()
 
         # t2_network(torch.rand(2, 2, 28, 256, 256))
