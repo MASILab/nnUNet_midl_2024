@@ -41,6 +41,10 @@ class Fuse_Average_Logits(nn.Module):
 
 
             #set_trace()
+            # the highest level prediction was fused
+            # return the rest of the unfused predictions (lists)
+            # highest res was index 0, that is why t2 and t1 logits start from index 1
+            # returning all of these values is necessary to comput the loss
             return fused_logits, t2_logits[1:], t1_logits[1:]
 
         # inference
@@ -89,8 +93,17 @@ class nnUNetTrainer_Average_Logits(nnUNetTrainer):
         return network   
 
     def compute_loss(self, output, target):
+        # fused_logits is the fused highest reolsuiton output (deep supervision)
+        # t2_Logits and t1_logits are lists of the rest of the resolution outputs (highest res was removed)
         fused_logits, t2_logits, t1_logits = output
 
+        # we use [] notation and the + symbol as concatenation of list elements
+        # computing the deep supervision loss expects a list of reosolution predictions (tensors)
+        # fused_logits gets prepended because it is the highest resolution and highest reosolution goes at beginning
+        # to handle the deep supervision loss for both model halves (t2 and t1), 
+        # we compute a loss for the T2 half using the fused logits as the highest res
+        # and we do the same for the t1 half
+        # then we sum the losses 
         loss1 = self.loss([fused_logits] + t2_logits, target)
         loss2 = self.loss([fused_logits] + t1_logits, target)
 
