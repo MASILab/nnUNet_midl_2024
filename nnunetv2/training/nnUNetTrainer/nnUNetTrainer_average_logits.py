@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from nnunetv2.utilities.get_network_from_plans import get_network_from_plans
-
+from pdb import set_trace
 
 
 class Fuse_Average_Logits(nn.Module):
@@ -23,6 +23,8 @@ class Fuse_Average_Logits(nn.Module):
         t2_x = x[:, 0:1, :, :, :]
         t1_x = x[:, 1:2, :, :, :]
 
+
+        #set_trace()
         # print("t2 input after split", t2_x.shape)
         # print("t1 input after split", t1_x.shape)
 
@@ -31,11 +33,27 @@ class Fuse_Average_Logits(nn.Module):
         t2_logits = self.t2_model(t2_x)
         t1_logits = self.t1_model(t1_x)
 
-        # averaging the highest resolution logits
-        fused_logits = (t2_logits[0] + t1_logits[0]) / 2.0
+        #set_trace()
+        
+        if self.training:
+            # averaging the highest resolution logits
+            fused_logits = (t2_logits[0] + t1_logits[0]) / 2.0
 
-        return fused_logits, t2_logits[1:], t1_logits[1:]
 
+            #set_trace()
+            return fused_logits, t2_logits[1:], t1_logits[1:]
+
+        # inference
+        else:
+            print("not training")
+            #during inference we are not training and the logits are just tensors of batch x channel x image dims
+            # all we are doing here is removing the indexing, because it is not a list of multi-level tensors, but just a single tensor
+            fused_logits = (t2_logits + t1_logits) / 2.0
+
+
+            #set_trace()
+            # only return the highest resolution output averaged during inference
+            return fused_logits
 
 class nnUNetTrainer_Average_Logits(nnUNetTrainer):
 
