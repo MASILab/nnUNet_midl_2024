@@ -140,7 +140,7 @@ def modified_forward(decoder, t1_decoder, skips, t1_skips):
 
         # prepend the t2 (fused) high res pred to the t1 preds before the loss is computed
         # this syntax is list concatenation, not addition
-        t1_r = [ copy.deepcopy(r[0]) ] + t1_r
+        t1_r = [ r[0] ] + t1_r
 
     #print("Check before computing loss")
     #pdb.set_trace()
