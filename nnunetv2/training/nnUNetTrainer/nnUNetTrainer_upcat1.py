@@ -106,24 +106,27 @@ def modified_forward(decoder, t1_decoder, skips, t1_skips):
 
     # when not using deep supervision, we just grab the highest resolution output (a tensor)
     # from the list of tensors
-    
-    # validation
-    if not decoder.deep_supervision:
-        r = seg_outputs[0] 
-        t1_r = seg_outputs[0] # this is a copy here so no worries
+    if decoder.training:
 
-    # training
-    # when using deep supervision, we need to return the list of segmentations from each level of the decoder
+        # validation
+        if not decoder.deep_supervision:
+            r = seg_outputs[0] 
+            t1_r = seg_outputs[0] # this is a copy here so no worries
+
+        # training
+        # when using deep supervision, we need to return the list of segmentations from each level of the decoder
+        else:
+            r = seg_outputs
+            t1_r = t1_seg_outputs 
+
+            # pdb.set_trace()
+
+            # prepend the t2 (fused) high res pred to the t1 preds before the loss is computed
+            # this syntax is list concatenation, not addition
+            t1_r = [ r[0] ] + t1_r
     else:
-        r = seg_outputs
-        t1_r = t1_seg_outputs 
-
-        # pdb.set_trace()
-
-        # prepend the t2 (fused) high res pred to the t1 preds before the loss is computed
-        # this syntax is list concatenation, not addition
-        t1_r = [ r[0] ] + t1_r
-
+        r = seg_outputs[0] 
+        return r
 
     #print("Check before computing loss")
     # pdb.set_trace()
