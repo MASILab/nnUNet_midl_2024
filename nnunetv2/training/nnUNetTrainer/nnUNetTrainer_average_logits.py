@@ -33,7 +33,7 @@ class Fuse_Average_Logits(nn.Module):
         t2_logits = self.t2_model(t2_x)
         t1_logits = self.t1_model(t1_x)
 
-        #set_trace()
+        # set_trace()
         
         if self.training:
             # averaging the highest resolution logits

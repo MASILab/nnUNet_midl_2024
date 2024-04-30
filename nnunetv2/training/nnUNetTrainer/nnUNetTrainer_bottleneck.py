@@ -32,43 +32,40 @@ class Fuse_Bottleneck(nn.Module):
         # t2 is the main modality
         x = t2_x
             
-        try:
-            ret = []
-            # loop through t2 encoder
-            for i, stage in enumerate(self.t2_model.encoder.stages):
+        
+        ret = []
+        # loop through t2 encoder
+        for i, stage in enumerate(self.t2_model.encoder.stages):
 
-                # get the t2 featuremaps
-                x = stage(x)
+            # get the t2 featuremaps
+            x = stage(x)
 
-                # skip connections before and at fusion layer need to be t2 concat t1 feature maps
-                if i < self.fusion_point:
-                    t1_x = self.t1_head[i](t1_x)
+            # skip connections before and at fusion layer need to be t2 concat t1 feature maps
+            if i < self.fusion_point:
+                t1_x = self.t1_head[i](t1_x)
 
-                    skip = torch.cat((x, t1_x), dim=1)
+                skip = torch.cat((x, t1_x), dim=1)
 
-                # fuse featuremaps at fusion point
-                elif i == self.fusion_point:
-                    t1_x = self.t1_head[i](t1_x)
+            # fuse featuremaps at fusion point
+            elif i == self.fusion_point:
+                t1_x = self.t1_head[i](t1_x)
 
-                    skip = torch.cat((x, t1_x), dim=1)
+                skip = torch.cat((x, t1_x), dim=1)
 
-                    x = torch.cat((x, t1_x), dim=1) # concat on hcannels down 2 output for both T1 and T2 heads
-
-
-                # after the fusion point, the skip is just the t2 feautre map
-                else:
-                    skip = x
+                x = torch.cat((x, t1_x), dim=1) # concat on hcannels down 2 output for both T1 and T2 heads
 
 
-                # these are the skip connections
-                # it may also be related to deep supervision
-                ret.append(skip)
+            # after the fusion point, the skip is just the t2 feautre map
+            else:
+                skip = x
 
 
-                output = ret if self.t2_model.encoder.return_skips else ret[-1]
-        except:
-            # pdb.set_trace()
-            print()            
+            # these are the skip connections
+            # it may also be related to deep supervision
+            ret.append(skip)
+
+
+            output = ret if self.t2_model.encoder.return_skips else ret[-1]
 
         return output
 

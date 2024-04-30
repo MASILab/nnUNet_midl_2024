@@ -5,7 +5,7 @@ import numpy as np
 from nnunetv2.utilities.get_network_from_plans import get_network_from_plans
 
 import copy
-
+import pdb
 
 
 class Fuse_Conv_0(nn.Module):
@@ -46,6 +46,7 @@ class Fuse_Conv_0(nn.Module):
     def forward(self, x):
 
         skips = self.encode(x)
+        #pdb.set_trace()
         return self.decoder(skips)
 
 
@@ -85,6 +86,8 @@ class nnUNetTrainer_Conv_0(nnUNetTrainer):
 
         # fuse the models 
         network = Fuse_Conv_0(t2_model=t2_network)
+
+        # pdb.set_trace()
 
         return network   
 

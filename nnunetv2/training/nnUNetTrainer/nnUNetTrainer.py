@@ -1,3 +1,13 @@
+
+import pdb
+import os
+import sys
+current_env = sys.prefix
+conda_env = os.environ.get('CONDA_PREFIX')
+print("Current environment (using sys.prefix):", current_env)
+print("Current environment (using os.environ['CONDA_PREFIX']):", conda_env)
+
+
 import inspect
 import multiprocessing
 import os
@@ -209,6 +219,7 @@ class nnUNetTrainer(object):
                 self.num_input_channels,
                 self.enable_deep_supervision,
             ).to(self.device)
+            # pdb.set_trace()
             # compile network for free speedup
             if self._do_i_compile():
                 self.print_to_log_file('Compiling network...')
@@ -348,6 +359,7 @@ class nnUNetTrainer(object):
             self.oversample_foreground_percent = oversample_percents[my_rank]
 
     def _build_loss(self):
+        #pdb.set_trace()
         if self.label_manager.has_regions:
             loss = DC_and_BCE_loss({},
                                    {'batch_dice': self.configuration_manager.batch_dice,
@@ -963,6 +975,7 @@ class nnUNetTrainer(object):
             # del data
             # l = self.loss(output, target)
 
+        #pdb.set_trace()
         # we only need the output with the highest output resolution (if DS enabled)
         if self.enable_deep_supervision:
             output = output[0]
@@ -1263,7 +1276,11 @@ class nnUNetTrainer(object):
         compute_gaussian.cache_clear()
 
     def run_training(self):
+        
+
         self.on_train_start()
+
+
 
         for epoch in range(self.current_epoch, self.num_epochs):
             self.on_epoch_start()
