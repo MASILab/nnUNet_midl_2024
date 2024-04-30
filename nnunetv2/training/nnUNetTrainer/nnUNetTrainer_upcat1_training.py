@@ -38,7 +38,7 @@ def modified_forward(decoder, t1_decoder, skips, t1_skips):
 
 
         # before and at fusion point, need preditions from both t2 and t1 models
-        if s <= 2:
+        if s <= 5:
             # upsample the skip connection (prediction from a blcok in the encoder)
             x = decoder.transpconvs[s](lres_input)
             t1_x = t1_decoder.transpconvs[s](t1_lres_input)
@@ -53,32 +53,16 @@ def modified_forward(decoder, t1_decoder, skips, t1_skips):
             t1_x = t1_decoder.stages[s](t1_x)
 
 
-        # After fusion point, only make t2 pred
-        # And join in the t1 skips because this is the last block
-        else:
 
-            ###################
-            # does t1_x need to be set to None here?
-            t1_x = None
-            ###################
-
-            # upsample the skip connection (prediction from a blcok in the encoder)
-            x = decoder.transpconvs[s](lres_input)
-
-            # concatenate the skip connection with the spatially upsampled current input 
-            x = torch.cat((x, 
-                           skips[-(s+2)],
-                           t1_skips[-(s+2)] 
-                           ), 1)
-
-            # make a prediction on the current input (input concat with skip)
-            x = decoder.stages[s](x)
-            #print("finished fifth layer")
+        # fuse
+        if s == 5:
+            x = torch.cat((x, t1_x), dim=1)
 
 
-
+        # this is a diffferent index than the others
+        # it has to be this way so that the loss at the final layer gets caluclated om the fusion
         # run the 1x1 convolutions
-        if s <= 2:
+        if s <= 4:
             # when training with deep supervision, we need to get a segmentation map (1x1 conv of logits)
             # this happends at every stage in the decoder
             # deep supervision is basically just a multi-level/hierarchical loss in the decoder
@@ -96,20 +80,17 @@ def modified_forward(decoder, t1_decoder, skips, t1_skips):
                 t1_seg_outputs.append(t1_decoder.seg_layers[-1](t1_x))
 
 
-        # fuse
-        if s == 2:
-            x = torch.cat((x, t1_x), dim=1)
-
-        #print("x shape",x.shape)
-
-        # run the 1x1 convolutions
-        # same as above but only on t2 model
-        if s > 2:
+        elif s == 5:
             if decoder.deep_supervision:
                 seg_outputs.append(decoder.seg_layers[s](x))
 
             elif s == (len(decoder.stages) - 1):
                 seg_outputs.append(decoder.seg_layers[-1](x))
+
+
+        else:
+            print("Undefined")
+            exit()
 
 
         # get ready for next stage of the decoder
@@ -121,46 +102,40 @@ def modified_forward(decoder, t1_decoder, skips, t1_skips):
     seg_outputs = seg_outputs[::-1]
     t1_seg_outputs = t1_seg_outputs[::-1]
 
+    # pdb.set_trace()
 
     # when not using deep supervision, we just grab the highest resolution output (a tensor)
     # from the list of tensors
-    if decoder.training:
-
-        if not decoder.deep_supervision:
-            r = seg_outputs[0] 
-            # t1_r = t1_seg_outputs[0]
-            t1_r = seg_outputs[0] # make this the fused output when not doing deep supervision, but honestly i dont think this ever gets used
-
-
-
-        # when using deep supervision, we need to return the list of segmentations from each level of the decoder
-        else:
-            r = seg_outputs
-            t1_r = t1_seg_outputs
-
-
-
-            # pdb.set_trace()
-
-            # prepend the t2 (fused) high res pred to the t1 preds before the loss is computed
-            # this syntax is list concatenation, not addition
-            t1_r = r[0:3]  + t1_r
-    else:
+    
+    # validation
+    if not decoder.deep_supervision:
         r = seg_outputs[0] 
-        return r
+        t1_r = seg_outputs[0] # this is a copy here so no worries
+
+    # training
+    # when using deep supervision, we need to return the list of segmentations from each level of the decoder
+    else:
+        r = seg_outputs
+        t1_r = t1_seg_outputs 
+
         # pdb.set_trace()
 
+        # prepend the t2 (fused) high res pred to the t1 preds before the loss is computed
+        # this syntax is list concatenation, not addition
+        t1_r = [ r[0] ] + t1_r
+
+
     #print("Check before computing loss")
-    #pdb.set_trace()
+    # pdb.set_trace()
 
     return r, t1_r
 
 
 
-class Fuse_Upcat_4(nn.Module):
+class Fuse_Upcat_1(nn.Module):
 
     def __init__(self, t2_model):
-        super(Fuse_Upcat_4, self).__init__()
+        super(Fuse_Upcat_1, self).__init__()
         self.t2_model = t2_model
 
         self.t1_head = copy.deepcopy(self.t2_model.encoder)
@@ -205,6 +180,7 @@ class Fuse_Upcat_4(nn.Module):
         # pdb.set_trace()
 
         if self.t2_model.training:
+            # print("Training")
             # because the decoder's forward pass has been redefined to be modified_forward() 
             # which is defined at the top of this file
             # we need to explicitly pass the decoder, and cannot implictly be using self
@@ -216,8 +192,10 @@ class Fuse_Upcat_4(nn.Module):
                                                 t1_skips)
 
             return t2_preds, t1_preds
-        
+
+
         else:
+            # print("Not training")
             preds = self.decoder(  self.decoder,
                                     self.t1_decoder,
                                     skips, 
@@ -227,7 +205,7 @@ class Fuse_Upcat_4(nn.Module):
         
 
 
-class nnUNetTrainer_Upcat4(nnUNetTrainer):
+class nnUNetTrainer_Upcat1_training(nnUNetTrainer):
 
 
     # Rewriting the network architecture
@@ -247,38 +225,13 @@ class nnUNetTrainer_Upcat4(nnUNetTrainer):
         
 
 
-
-
-        # change the input channel shape of the first layer of the last decoder block (upcat 1 in monai) to accept skip connections
-        t2_decoder_conv_last_block = t2_network.decoder.stages[-1].convs[0]
-        setattr(t2_decoder_conv_last_block, "conv", nn.Conv3d(96, 32, kernel_size=(1, 3, 3), stride=(1, 1, 1), padding=(0, 1, 1)) ) 
-        t2_decoder_conv_last_block.all_modules[0] = t2_decoder_conv_last_block.conv
-
-        t2_decoder_conv_second_last_block = t2_network.decoder.stages[-2].convs[0]
-        setattr(t2_decoder_conv_second_last_block, "conv", nn.Conv3d(192, 64, kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1)) )
-        t2_decoder_conv_second_last_block.all_modules[0] = t2_decoder_conv_second_last_block.conv
-
-        t2_decoder_conv_third_last_block = t2_network.decoder.stages[-3].convs[0]
-        setattr(t2_decoder_conv_third_last_block, "conv", nn.Conv3d(384, 128, kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1)) )
-        t2_decoder_conv_third_last_block.all_modules[0] = t2_decoder_conv_third_last_block.conv
-
-        # t2_decoder_conv_fourth_last_block = t2_network.decoder.stages[-4].convs[0]
-        # setattr(t2_decoder_conv_fourth_last_block, "conv", nn.Conv3d(768, 256, kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1)) )
-        # t2_decoder_conv_fourth_last_block.all_modules[0] = t2_decoder_conv_fourth_last_block.conv
-
-        # t2_decoder_conv_fifth_last_block = t2_network.decoder.stages[-5].convs[0]
-        # setattr(t2_decoder_conv_fifth_last_block, "conv", nn.Conv3d(960, 320, kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1)) )
-        # t2_decoder_conv_fifth_last_block.all_modules[0] = t2_decoder_conv_fifth_last_block.conv
-
-
-        # double the input channels to the transpose convolution after the fusion block in the decoder to handle the concatenated featuremaps
-        t2_network.decoder.transpconvs[3] = nn.ConvTranspose3d(512, 128, kernel_size=(2, 2, 2), stride=(2, 2, 2))
-
-
+        # modify the seg layer inout to accep the concatenated size of out of upcat1 (last block before 1x1 conv)
+        # double the input channels
+        t2_network.decoder.seg_layers[-1] = nn.Conv3d(64, 2, kernel_size=(1, 1, 1), stride=(1, 1, 1))
 
 
         # fuse the models 
-        network = Fuse_Upcat_4(t2_model=t2_network)
+        network = Fuse_Upcat_1(t2_model=t2_network)
 
 
 
@@ -351,6 +304,8 @@ class nnUNetTrainer_Upcat4(nnUNetTrainer):
         with autocast(self.device.type, enabled=True) if self.device.type == 'cuda' else dummy_context():
             output = self.forward_pass(data)    # channge
             del data
+
+            # pdb.set_trace()
             l = self.compute_loss(output, target)
 
 
@@ -368,6 +323,7 @@ class nnUNetTrainer_Upcat4(nnUNetTrainer):
             # here we only care about the t2 preds because his had the fusion. 
             output = output[0][0]
             target = target[0]
+
 
         # the following is needed for online evaluation. Fake dice (green line)
         axes = [0] + list(range(2, output.ndim))

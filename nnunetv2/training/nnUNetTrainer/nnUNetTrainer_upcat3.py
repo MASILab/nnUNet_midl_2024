@@ -121,31 +121,34 @@ def modified_forward(decoder, t1_decoder, skips, t1_skips):
     seg_outputs = seg_outputs[::-1]
     t1_seg_outputs = t1_seg_outputs[::-1]
 
+    if decoder.training:
 
-    # when not using deep supervision, we just grab the highest resolution output (a tensor)
-    # from the list of tensors
-    if not decoder.deep_supervision:
-        r = seg_outputs[0] 
-        # t1_r = t1_seg_outputs[0]
-        t1_r = seg_outputs[0] # make this the fused output when not doing deep supervision, but honestly i dont think this ever gets used
+        # when not using deep supervision, we just grab the highest resolution output (a tensor)
+        # from the list of tensors
+        if not decoder.deep_supervision:
+            r = seg_outputs[0] 
+            # t1_r = t1_seg_outputs[0]
+            t1_r = seg_outputs[0] # make this the fused output when not doing deep supervision, but honestly i dont think this ever gets used
 
 
 
-    # when using deep supervision, we need to return the list of segmentations from each level of the decoder
+        # when using deep supervision, we need to return the list of segmentations from each level of the decoder
+        else:
+            r = seg_outputs
+            t1_r = t1_seg_outputs
+
+
+
+            # pdb.set_trace()
+
+            # prepend the t2 (fused) high res pred to the t1 preds before the loss is computed
+            # this syntax is list concatenation, not addition
+            t1_r = r[0:2]  + t1_r
+
+            # pdb.set_trace()
     else:
-        r = seg_outputs
-        t1_r = t1_seg_outputs
-
-
-
-        # pdb.set_trace()
-
-        # prepend the t2 (fused) high res pred to the t1 preds before the loss is computed
-        # this syntax is list concatenation, not addition
-        t1_r = r[0:2]  + t1_r
-
-        # pdb.set_trace()
-
+        r = seg_outputs[0] 
+        return r
     #print("Check before computing loss")
     #pdb.set_trace()
 
@@ -198,17 +201,28 @@ class Fuse_Upcat_3(nn.Module):
 
         skips, t1_skips = self.encode(x)
 
-        # because the decoder's forward pass has been redefined to be modified_forward() 
-        # which is defined at the top of this file
-        # we need to explicitly pass the decoder, and cannot implictly be using self
-        # this is because the modified forward function is defined outside of the class
-        #return self.decoder(self.decoder, skips, t1_skips)
-        t2_preds, t1_preds = self.decoder(  self.decoder,
-                                            self.t1_decoder,
-                                            skips, 
-                                            t1_skips)
+        # pdb.set_trace()
 
-        return t2_preds, t1_preds
+        if self.t2_model.training:
+            # because the decoder's forward pass has been redefined to be modified_forward() 
+            # which is defined at the top of this file
+            # we need to explicitly pass the decoder, and cannot implictly be using self
+            # this is because the modified forward function is defined outside of the class
+            #return self.decoder(self.decoder, skips, t1_skips)
+            t2_preds, t1_preds = self.decoder(  self.decoder,
+                                                self.t1_decoder,
+                                                skips, 
+                                                t1_skips)
+
+            return t2_preds, t1_preds
+        
+        else:
+            preds = self.decoder(  self.decoder,
+                                    self.t1_decoder,
+                                    skips, 
+                                    t1_skips)
+
+            return preds
         
 
 
